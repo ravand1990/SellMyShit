@@ -271,10 +271,19 @@ namespace SellMyShit
             CompatibilityGroupId)]
         public EmptyNode CompatibilityGroup { get; set; } = new();
 
+
+        [Menu(
+            "I Want button child index",
+            "Child index of the I Want currency-selector button.",
+            501,
+            CompatibilityGroupId)]
+        public RangeNode<int> IWantButtonChildIndex { get; set; } =
+            new(7, 0, 50);
+
         [Menu(
             "I Have button child index",
             "Child index of the I Have currency-selector button.",
-            501,
+            502,
             CompatibilityGroupId)]
         public RangeNode<int> IHaveButtonChildIndex { get; set; } =
             new(10, 0, 50);
@@ -282,7 +291,7 @@ namespace SellMyShit
         [Menu(
             "Currency search input child index",
             "Child index of the currency-picker search input.",
-            502,
+            503,
             CompatibilityGroupId)]
         public RangeNode<int> CurrencyPickerSearchInputChildIndex { get; set; } =
             new(4, 0, 50);
@@ -290,7 +299,7 @@ namespace SellMyShit
         [Menu(
             "Sell button child index",
             "Child index of the final sell button.",
-            503,
+            504,
             CompatibilityGroupId)]
         public RangeNode<int> SellButtonChildIndex { get; set; } =
             new(16, 0, 50);

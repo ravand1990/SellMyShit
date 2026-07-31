@@ -18,6 +18,7 @@ namespace SellMyShit
 {
     public class Core : BaseSettingsPlugin<Settings>
     {
+        private const string WantedCurrencyName = "Chaos Orb";
         private const int SortByName = 0;
         private const int SortByValue = 1;
         private const int SortByOwned = 2;
@@ -32,6 +33,10 @@ namespace SellMyShit
         private SellSequenceStep _sellSequenceStep = SellSequenceStep.Idle;
         private DateTime _sellSequenceStepStartedUtc;
         private CurrencyExchangeCurrencyPickerCurrencyOption _pendingSellItem;
+        private CurrencyExchangeCurrencyPickerCurrencyOption _pendingWantedItem;
+
+        private string _pendingSellItemName = string.Empty;
+        private int _pendingSellOwnedAmount;
 
         private static readonly TimeSpan CurrencyItemsRefreshInterval =
             TimeSpan.FromMilliseconds(500);
@@ -96,6 +101,13 @@ namespace SellMyShit
                             Graphics.DrawFrame(iHaveButtonRect.BottomLeft, iHaveButtonRect.TopRight, Color.Red, 2);
                             Graphics.DrawCircleFilled(iHaveButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
 
+                            var iWantButtonChildIndex = Settings.IWantButtonChildIndex.Value;
+                            var iWantButton = currencyExchangePanel.GetChildAtIndex(iWantButtonChildIndex);
+                            var iWantButtonRect = iWantButton.GetClientRect();
+
+                            Graphics.DrawFrame(iWantButtonRect.BottomLeft, iWantButtonRect.TopRight, Color.Red, 2);
+                            Graphics.DrawCircleFilled(iWantButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
+
                             var offeredItemCountInput = currencyExchangePanel.OfferedItemCountInput;
                             var offeredItemCountInputRect = offeredItemCountInput.GetClientRect();
 
@@ -114,6 +126,8 @@ namespace SellMyShit
 
                             Graphics.DrawFrame(sellButtonRect.BottomLeft, sellButtonRect.TopRight, Color.Red, 2);
                             Graphics.DrawCircleFilled(sellButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
+
+
                         }
                     }
                 }
@@ -571,11 +585,8 @@ namespace SellMyShit
                 return;
             }
 
-            var itemName =
-                GetItemName(_pendingSellItem);
-
-            var ownedAmount =
-                _pendingSellItem.Owned;
+            var itemName = _pendingSellItemName;
+            var ownedAmount = _pendingSellOwnedAmount;
 
             var currencyPicker =
                 currencyExchangePanel.CurrencyPicker;
@@ -598,7 +609,7 @@ namespace SellMyShit
                         SetSellSequenceStep(
                             isCurrencyPickerVisible
                                 ? SellSequenceStep
-                                    .ClickCurrencyPickerSearchInput
+                                    .ClickCurrencyPickerOfferedSearchInput
                                 : SellSequenceStep.ClickIHave);
 
                         break;
@@ -612,7 +623,7 @@ namespace SellMyShit
                         if (isCurrencyPickerVisible)
                         {
                             SetSellSequenceStep(
-                                SellSequenceStep.WaitForCurrencyPicker);
+                                SellSequenceStep.WaitForOfferedCurrencyPicker);
 
                             break;
                         }
@@ -640,26 +651,26 @@ namespace SellMyShit
                         if (QueueGameClick(iHaveButtonPosition))
                         {
                             SetSellSequenceStep(
-                                SellSequenceStep.WaitForCurrencyPicker);
+                                SellSequenceStep.WaitForOfferedCurrencyPicker);
                         }
 
                         break;
                     }
 
-                case SellSequenceStep.WaitForCurrencyPicker:
+                case SellSequenceStep.WaitForOfferedCurrencyPicker:
                     {
                         if (isCurrencyPickerVisible)
                         {
                             SetSellSequenceStep(
                                 SellSequenceStep
-                                    .ClickCurrencyPickerSearchInput);
+                                    .ClickCurrencyPickerOfferedSearchInput);
                         }
 
                         break;
                     }
 
                 case SellSequenceStep
-                    .ClickCurrencyPickerSearchInput:
+                    .ClickCurrencyPickerOfferedSearchInput:
                     {
                         if (IsGameInputBusy())
                             break;
@@ -699,14 +710,14 @@ namespace SellMyShit
                         {
                             SetSellSequenceStep(
                                 SellSequenceStep
-                                    .TypeCurrencyPickerSearchQuery);
+                                    .TypeCurrencyPickerOfferedSearchQuery);
                         }
 
                         break;
                     }
 
                 case SellSequenceStep
-                    .TypeCurrencyPickerSearchQuery:
+                    .TypeCurrencyPickerOfferedSearchQuery:
                     {
                         if (IsGameInputBusy())
                             break;
@@ -723,13 +734,13 @@ namespace SellMyShit
                         {
                             SetSellSequenceStep(
                                 SellSequenceStep
-                                    .ValidateSearchQuery);
+                                    .ValidateOfferedSearchQuery);
                         }
 
                         break;
                     }
 
-                case SellSequenceStep.ValidateSearchQuery:
+                case SellSequenceStep.ValidateOfferedSearchQuery:
                     {
 
                         if (IsGameInputBusy())
@@ -766,14 +777,14 @@ namespace SellMyShit
                                 .Children[0].Text;
                         if (searchText == itemName)
                         {
-                            SetSellSequenceStep(SellSequenceStep.WaitForCurrencyPickerSearchResults);
+                            SetSellSequenceStep(SellSequenceStep.WaitForCurrencyPickerOfferedSearchResults);
                         }
 
                         break;
                     }
 
                 case SellSequenceStep
-                    .WaitForCurrencyPickerSearchResults:
+                    .WaitForCurrencyPickerOfferedSearchResults:
                     {
                         if (IsGameInputBusy())
                             break;
@@ -841,14 +852,14 @@ namespace SellMyShit
                         {
                             SetSellSequenceStep(
                                 SellSequenceStep
-                                    .WaitForCurrencyPickerToClose);
+                                    .WaitForOfferedCurrencyPickerToClose);
                         }
 
                         break;
                     }
 
                 case SellSequenceStep
-                    .WaitForCurrencyPickerToClose:
+                    .WaitForOfferedCurrencyPickerToClose:
                     {
                         if (IsGameInputBusy() ||
                             isCurrencyPickerVisible)
@@ -857,14 +868,325 @@ namespace SellMyShit
                         }
 
 
-                        SetSellSequenceStep(SellSequenceStep.WaitForMarketRatio);
-
-
-                        SetSellSequenceStep(
-                        SellSequenceStep.WaitForMarketRatio);
+                        SetSellSequenceStep(SellSequenceStep.CheckIfChaosIsWanted);
 
                         break;
                     }
+
+
+                case SellSequenceStep.CheckIfChaosIsWanted:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+
+                        if (isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickCurrencyPickerWantedSearchInput);
+
+                            break;
+                        }
+
+
+                        var iWantButtonChildIndex = Settings.IWantButtonChildIndex.Value;
+
+                        if (currencyExchangePanel?.Children == null ||
+                            currencyExchangePanel.Children.Count <=
+                            iWantButtonChildIndex)
+                        {
+                            LogError("I Want button not found, aborting...");
+                            StopSellSequence();
+                            break;
+                        }
+
+                        var iWantButton = currencyExchangePanel.GetChildAtIndex(iWantButtonChildIndex);
+                        var selectedWantedItemName = iWantButton.GetChildAtIndex(0).Text;
+
+                        if (selectedWantedItemName == WantedCurrencyName)
+                        {
+                            MyLogMessage(
+                                $"{itemName} is already selected as wanted currency.");
+
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickOfferedItemInput);
+
+                            break;
+                        }
+
+                        SetSellSequenceStep(
+                            SellSequenceStep.ClickIWant);
+
+                        break;
+                    }
+
+                case SellSequenceStep.ClickIWant:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.WaitForWantedCurrencyPicker);
+
+                            break;
+                        }
+
+                        var iWantButtonChildIndex = Settings.IWantButtonChildIndex.Value;
+
+                        if (currencyExchangePanel.Children == null ||
+                            currencyExchangePanel.Children.Count <=
+                            iWantButtonChildIndex)
+                        {
+                            LogError("I Want button was not found.");
+                            StopSellSequence();
+                            break;
+                        }
+
+                        var iWantButtonPosition =
+                            (Vector2)currencyExchangePanel
+                                .GetChildAtIndex(iWantButtonChildIndex)
+                                .GetClientRect()
+                                .Center;
+
+                        if (QueueGameClick(iWantButtonPosition))
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.WaitForWantedCurrencyPicker);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.WaitForWantedCurrencyPicker:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickCurrencyPickerWantedSearchInput);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.ClickCurrencyPickerWantedSearchInput:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (!isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickIWant);
+
+                            break;
+                        }
+
+                        var searchInputChildIndex = Settings.CurrencyPickerSearchInputChildIndex.Value;
+
+                        if (currencyPicker.Children == null ||
+                            currencyPicker.Children.Count <=
+                            searchInputChildIndex)
+                        {
+                            LogError(
+                                "Wanted currency picker search input was not found.");
+
+                            StopSellSequence();
+                            break;
+                        }
+
+                        var searchInputPosition =
+                            (Vector2)currencyPicker
+                                .GetChildAtIndex(searchInputChildIndex)
+                                .GetClientRect()
+                                .Center;
+
+                        if (QueueGameClick(searchInputPosition))
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.TypeCurrencyPickerWantedSearchQuery);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.TypeCurrencyPickerWantedSearchQuery:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (!isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickIWant);
+
+                            break;
+                        }
+
+                        if (QueueGameTextReplacement(WantedCurrencyName))
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ValidatedWantedSearchQuery);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.ValidatedWantedSearchQuery:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (!isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickIWant);
+
+                            break;
+                        }
+
+                        var searchInputChildIndex = Settings.CurrencyPickerSearchInputChildIndex.Value;
+
+                        if (currencyPicker.Children == null ||
+                            currencyPicker.Children.Count <= searchInputChildIndex)
+                        {
+                            LogError(
+                                "Wanted currency picker search input was not found.");
+
+                            StopSellSequence();
+                            break;
+                        }
+
+                        var searchInput =
+                            currencyPicker.GetChildAtIndex(searchInputChildIndex);
+
+                        if (searchInput.Children == null ||
+                            searchInput.Children.Count == 0)
+                        {
+                            break;
+                        }
+
+                        var searchText = searchInput.GetChildAtIndex(0).Text?.Trim();
+
+                        if (string.Equals(
+                                searchText,
+                                WantedCurrencyName,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep
+                                    .WaitForCurrencyPickerWantedSearchResults);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.WaitForCurrencyPickerWantedSearchResults:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (!isCurrencyPickerVisible)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ClickIWant);
+
+                            break;
+                        }
+
+                        if (TimeInCurrentStep() <
+                            TimeSpan.FromMilliseconds(
+                                Settings.CurrencySearchDelayMilliseconds.Value))
+                        {
+                            break;
+                        }
+
+
+                        _pendingWantedItem = currencyPicker.Options.Select(option => option).Where(option => option.Children.Any(child => child.Text == WantedCurrencyName)).FirstOrDefault();
+
+
+                        var wantedItemRect = _pendingWantedItem.GetClientRect();
+
+                        if (wantedItemRect.Width <= 0 ||
+                            wantedItemRect.Height <= 0)
+                        {
+                            break;
+                        }
+
+                        var optionContainer =
+                            currencyPicker.OptionContainer;
+
+                        if (optionContainer != null)
+                        {
+                            var optionContainerRect =
+                                optionContainer.GetClientRect();
+
+                            if (!optionContainerRect.Intersects(wantedItemRect))
+                                break;
+                        }
+
+                        SetSellSequenceStep(
+                            SellSequenceStep.ClickWantedItem);
+
+                        break;
+                    }
+
+                case SellSequenceStep.ClickWantedItem:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+
+                        if (_pendingWantedItem == null)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep
+                                    .WaitForCurrencyPickerWantedSearchResults);
+
+                            break;
+                        }
+
+                        var wantedItemRect = _pendingWantedItem.GetClientRect();
+
+                        if (wantedItemRect.Width <= 0 ||
+                            wantedItemRect.Height <= 0)
+                        {
+                            break;
+                        }
+
+                        if (QueueGameClick(
+                                (Vector2)wantedItemRect.Center))
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep
+                                    .WaitForWantedCurrencyPickerToClose);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.WaitForWantedCurrencyPickerToClose:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (isCurrencyPickerVisible)
+                            break;
+
+                        _pendingWantedItem = null;
+
+                        SetSellSequenceStep(
+                            SellSequenceStep.WaitForMarketRatio);
+
+                        break;
+                    }
+
+
+
 
                 case SellSequenceStep.WaitForMarketRatio:
                     {
@@ -903,13 +1225,6 @@ namespace SellMyShit
                         if (IsGameInputBusy())
                             break;
 
-                        if (isCurrencyPickerVisible)
-                        {
-                            SetSellSequenceStep(
-                                SellSequenceStep.Start);
-
-                            break;
-                        }
 
                         if (offeredItemCountInput == null)
                         {
@@ -920,10 +1235,7 @@ namespace SellMyShit
                             break;
                         }
 
-                        var offeredInputPosition =
-                            (Vector2)offeredItemCountInput
-                                .GetClientRect()
-                                .Center;
+                        var offeredInputPosition = (Vector2)offeredItemCountInput.GetClientRect().Center;
 
                         if (QueueGameClick(offeredInputPosition))
                         {
@@ -953,6 +1265,8 @@ namespace SellMyShit
 
                         break;
                     }
+
+
 
                 case SellSequenceStep.ClickWantedItemInput:
                     {
@@ -1029,12 +1343,58 @@ namespace SellMyShit
                                     CultureInfo.InvariantCulture)))
                         {
                             SetSellSequenceStep(
-                                SellSequenceStep.ClickSellButton);
+                                SellSequenceStep.BlurInput);
                         }
 
                         break;
                     }
 
+                case SellSequenceStep.BlurInput:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        var villageGold = currencyExchangePanel.GetChildAtIndex(14);
+                        var villageGoldPosition = villageGold.GetClientRect().Center;
+
+                        if (QueueGameClick(villageGoldPosition))
+                        {
+                            MyLogMessage($"Blurring input to lock in ratio... ");
+
+                            SetSellSequenceStep(
+                                SellSequenceStep.CheckIfSellButtonIsActive);
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.CheckIfSellButtonIsActive:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+
+                        var sellButtonChildIndex =
+                            Settings.SellButtonChildIndex.Value;
+
+                        if (currencyExchangePanel.Children == null ||
+                            currencyExchangePanel.Children.Count <=
+                            sellButtonChildIndex)
+                        {
+                            LogError("Sell button was not found.");
+                            StopSellSequence();
+                            break;
+                        }
+
+                        var sellButton = currencyExchangePanel.GetChildAtIndex(sellButtonChildIndex);
+
+                        if (sellButton.IsActive)
+                        {
+                            SetSellSequenceStep(SellSequenceStep.ClickSellButton);
+                        }
+
+                        break;
+                    }
 
                 case SellSequenceStep.ClickSellButton:
                     {
@@ -1098,7 +1458,7 @@ namespace SellMyShit
                         if (isCurrencyPickerVisible)
                         {
                             SetSellSequenceStep(
-                                SellSequenceStep.WaitForCurrencyPicker);
+                                SellSequenceStep.WaitForOfferedCurrencyPicker);
 
                             break;
                         }
@@ -1146,20 +1506,19 @@ namespace SellMyShit
 
             if (_sellSequenceStep != SellSequenceStep.Idle)
             {
-                MyLogMessage(
-                    "A sell sequence is already running.");
-
+                MyLogMessage("A sell sequence is already running.");
                 return;
             }
 
             _pendingSellItem = item;
-
-            SetSellSequenceStep(
-                SellSequenceStep.Start);
+            _pendingSellItemName = GetItemName(item);
+            _pendingSellOwnedAmount = item.Owned;
 
             MyLogMessage(
-                $"Started sell sequence for " +
-                $"{GetItemName(item)}.");
+                $"Started sell sequence for {_pendingSellItemName}, " +
+                $"owned amount: {_pendingSellOwnedAmount}.");
+
+            SetSellSequenceStep(SellSequenceStep.Start);
         }
 
         private static string GetItemName(
@@ -1197,7 +1556,12 @@ namespace SellMyShit
         private void StopSellSequence()
         {
             _sellSequenceStep = SellSequenceStep.Idle;
+
             _pendingSellItem = null;
+            _pendingWantedItem = null;
+
+            _pendingSellItemName = string.Empty;
+            _pendingSellOwnedAmount = 0;
         }
 
         private TimeSpan TimeInCurrentStep()

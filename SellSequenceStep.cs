@@ -4,20 +4,38 @@ enum SellSequenceStep
 
     Start,
     ClickIHave,
-    WaitForCurrencyPicker,
-    ClickCurrencyPickerSearchInput,
-    TypeCurrencyPickerSearchQuery,
-    ValidateSearchQuery,
-    WaitForCurrencyPickerSearchResults,
+    WaitForOfferedCurrencyPicker,
+    ClickCurrencyPickerOfferedSearchInput,
+    TypeCurrencyPickerOfferedSearchQuery,
+    ValidateOfferedSearchQuery,
+    WaitForCurrencyPickerOfferedSearchResults,
     ClickOwnedItem,
-    WaitForCurrencyPickerToClose,
+    WaitForOfferedCurrencyPickerToClose,
     ClickOfferedItemInput,
     TypeOfferedItemValue,
+
+
+    CheckIfChaosIsWanted,
+    ClickIWant,
+    WaitForWantedCurrencyPicker,
+    ClickCurrencyPickerWantedSearchInput,
+    TypeCurrencyPickerWantedSearchQuery,
+    ValidatedWantedSearchQuery,
+    WaitForCurrencyPickerWantedSearchResults,
+    ClickWantedItem,
+    WaitForWantedCurrencyPickerToClose,
+
+
     ClickWantedItemInput,
     TypeWantedItemValue,
+    BlurInput,
     WaitForMarketRatio,
-    CheckUnfavorableTrade,
+
+
+
+    CheckIfSellButtonIsActive,
     ClickSellButton,
+    CheckUnfavorableTrade,
     ReopenIHave,
     End,
     CloseCurrencyPicker,
