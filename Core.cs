@@ -1257,7 +1257,7 @@ namespace SellMyShit
             Vector2 screenPosition)
         {
 
-            screenPosition = screenPosition + GameController.Window.GetWindowRectangle().Location;
+            screenPosition = screenPosition + GameController.Window.GetWindowRectangleReal().Location;
 
             var overlayHideMilliseconds =
                 Settings.ClickOverlayHideMilliseconds.Value;
@@ -1322,7 +1322,7 @@ namespace SellMyShit
     Vector2 screenPosition)
         {
 
-            screenPosition = screenPosition + GameController.Window.GetWindowRectangle().Location;
+            screenPosition = screenPosition + GameController.Window.GetWindowRectangleReal().Location;
 
             var overlayHideMilliseconds =
                 Settings.ClickOverlayHideMilliseconds.Value;
