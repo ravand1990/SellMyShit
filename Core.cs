@@ -67,8 +67,6 @@ namespace SellMyShit
                 var currencyExchangePanel = GetCurrencyExchangePanel();
 
 
-
-
                 if (Settings.Debug)
                 {
                     var currencyPicker = currencyExchangePanel.CurrencyPicker;
@@ -80,7 +78,15 @@ namespace SellMyShit
                     var searchInputRect = searchInput.GetClientRect();
                     Graphics.DrawFrame(searchInputRect.BottomLeft, searchInput.GetClientRect().TopRight, Color.Red, 2);
                     Graphics.DrawCircleFilled(searchInputRect.Center.ToVector2Num(), 5, Color.Red, 5);
+
                     if (storedMousePosition.X > 0 && storedMousePosition.Y > 0) Graphics.DrawCircleFilled(storedMousePosition.ToVector2(), 5, Color.Red, 5);
+
+                    var iHaveButtonChildIndex = Settings.IHaveButtonChildIndex.Value;
+                    var iHaveButton = currencyExchangePanel.GetChildAtIndex(iHaveButtonChildIndex);
+                    var iHaveButtonRect = iHaveButton.GetClientRect();
+                    
+                    Graphics.DrawFrame(iHaveButtonRect.BottomLeft, searchInput.GetClientRect().TopRight, Color.Red, 2);
+                    Graphics.DrawCircleFilled(iHaveButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
                 }
 
 
