@@ -107,10 +107,16 @@ namespace SellMyShit
 
                             Graphics.DrawFrame(wantedItemCountInputRect.BottomLeft, wantedItemCountInputRect.TopRight, Color.Red, 2);
                             Graphics.DrawCircleFilled(wantedItemCountInputRect.Center.ToVector2Num(), 5, Color.Red, 5);
+
+                            var sellButtonChildIndex = Settings.SellButtonChildIndex.Value;
+                            var sellButton = currencyExchangePanel.GetChildAtIndex(sellButtonChildIndex);
+                            var sellButtonRect = sellButton.GetClientRect();
+
+                            Graphics.DrawFrame(sellButtonRect.BottomLeft, sellButtonRect.TopRight, Color.Red, 2);
+                            Graphics.DrawCircleFilled(sellButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
                         }
                     }
                 }
-
 
                 if (currencyExchangePanel?.IsVisible != true)
                     return;
