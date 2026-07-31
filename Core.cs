@@ -69,24 +69,46 @@ namespace SellMyShit
 
                 if (Settings.Debug)
                 {
-                    var currencyPicker = currencyExchangePanel.CurrencyPicker;
-                    var searchInputChildIndex =
-                                Settings
-                                    .CurrencyPickerSearchInputChildIndex
-                                    .Value;
-                    var searchInput = currencyPicker.GetChildAtIndex(searchInputChildIndex);
-                    var searchInputRect = searchInput.GetClientRect();
-                    Graphics.DrawFrame(searchInputRect.BottomLeft, searchInput.GetClientRect().TopRight, Color.Red, 2);
-                    Graphics.DrawCircleFilled(searchInputRect.Center.ToVector2Num(), 5, Color.Red, 5);
+                    if (currencyExchangePanel.IsVisible)
+                    {
+                        var currencyPicker = currencyExchangePanel.CurrencyPicker;
 
-                    if (storedMousePosition.X > 0 && storedMousePosition.Y > 0) Graphics.DrawCircleFilled(storedMousePosition.ToVector2(), 5, Color.Red, 5);
+                        if (currencyPicker.IsVisible)
+                        {
+                            var searchInputChildIndex =
+                                        Settings
+                                            .CurrencyPickerSearchInputChildIndex
+                                            .Value;
+                            var searchInput = currencyPicker.GetChildAtIndex(searchInputChildIndex);
+                            var searchInputRect = searchInput.GetClientRect();
+                            Graphics.DrawFrame(searchInputRect.BottomLeft, searchInput.GetClientRect().TopRight, Color.Red, 2);
+                            Graphics.DrawCircleFilled(searchInputRect.Center.ToVector2Num(), 5, Color.Red, 5);
+                        }
 
-                    var iHaveButtonChildIndex = Settings.IHaveButtonChildIndex.Value;
-                    var iHaveButton = currencyExchangePanel.GetChildAtIndex(iHaveButtonChildIndex);
-                    var iHaveButtonRect = iHaveButton.GetClientRect();
-                    
-                    Graphics.DrawFrame(iHaveButtonRect.BottomLeft, searchInput.GetClientRect().TopRight, Color.Red, 2);
-                    Graphics.DrawCircleFilled(iHaveButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
+                        if (!currencyPicker.IsVisible)
+                        {
+                            if (storedMousePosition.X > 0 && storedMousePosition.Y > 0) Graphics.DrawCircleFilled(storedMousePosition.ToVector2(), 5, Color.Red, 5);
+
+                            var iHaveButtonChildIndex = Settings.IHaveButtonChildIndex.Value;
+                            var iHaveButton = currencyExchangePanel.GetChildAtIndex(iHaveButtonChildIndex);
+                            var iHaveButtonRect = iHaveButton.GetClientRect();
+
+                            Graphics.DrawFrame(iHaveButtonRect.BottomLeft, iHaveButtonRect.TopRight, Color.Red, 2);
+                            Graphics.DrawCircleFilled(iHaveButtonRect.Center.ToVector2Num(), 5, Color.Red, 5);
+
+                            var offeredItemCountInput = currencyExchangePanel.OfferedItemCountInput;
+                            var offeredItemCountInputRect = offeredItemCountInput.GetClientRect();
+
+                            Graphics.DrawFrame(offeredItemCountInputRect.BottomLeft, offeredItemCountInputRect.TopRight, Color.Red, 2);
+                            Graphics.DrawCircleFilled(offeredItemCountInputRect.Center.ToVector2Num(), 5, Color.Red, 5);
+
+                            var wantedItemCountInput = currencyExchangePanel.WantedItemCountInput;
+                            var wantedItemCountInputRect = wantedItemCountInput.GetClientRect();
+
+                            Graphics.DrawFrame(wantedItemCountInputRect.BottomLeft, wantedItemCountInputRect.TopRight, Color.Red, 2);
+                            Graphics.DrawCircleFilled(wantedItemCountInputRect.Center.ToVector2Num(), 5, Color.Red, 5);
+                        }
+                    }
                 }
 
 
