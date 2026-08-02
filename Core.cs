@@ -300,7 +300,7 @@ namespace SellMyShit
                 return;
             }
 
-            DrawFilterAndSortControls();
+            DrawFilterControls();
 
             var filteredItems =
                 GetDisplayItems(ownedItems);
@@ -327,52 +327,20 @@ namespace SellMyShit
             ImGui.End();
         }
 
-        private void DrawFilterAndSortControls()
+        private void DrawFilterControls()
         {
             ImGui.InputText(
                 "Filter",
                 ref _filterText,
                 256);
-
-            ImGui.NewLine();
-            ImGui.SameLine();
-
-            DrawSortButton(
-                SortOptions.Name,
-                SortByName);
-
-            ImGui.SameLine();
-
-            DrawSortButton(
-                SortOptions.Value,
-                SortByValue);
-
-            ImGui.SameLine();
-
-            DrawSortButton(
-                SortOptions.Owned,
-                SortByOwned);
         }
 
-        private void DrawSortButton(
-            string label,
-            int column)
+        private void HandleSortHeaderClick(int column)
         {
             var configuredColumn =
                 GetConfiguredSortColumn();
 
-            var isCurrentColumn =
-                configuredColumn == column;
-
-            var buttonLabel = isCurrentColumn
-                ? $"Sort {label} " +
-                  $"{(Settings.SortAscending.Value ? "↑" : "↓")}"
-                : $"Sort {label}";
-
-            if (!ImGui.Button(buttonLabel))
-                return;
-
-            if (isCurrentColumn)
+            if (configuredColumn == column)
             {
                 Settings.SortAscending.Value =
                     !Settings.SortAscending.Value;
@@ -386,15 +354,42 @@ namespace SellMyShit
             Settings.SortAscending.Value = true;
         }
 
+        private void DrawSortHeader(
+            string label,
+            int column)
+        {
+            var isCurrentColumn =
+                GetConfiguredSortColumn() == column;
+
+            var indicator = isCurrentColumn
+                ? Settings.SortAscending.Value
+                    ? " ^"
+                    : " v"
+                : string.Empty;
+
+            var buttonLabel =
+                $"{label}{indicator}##SortHeader{column}";
+
+            if (ImGui.Button(
+                    buttonLabel,
+                    new NumVector2(
+                        ImGui.GetContentRegionAvail().X,
+                        0)))
+            {
+                HandleSortHeaderClick(column);
+            }
+        }
+
         private unsafe void DrawOwnedItemsTable(
-    IReadOnlyList<
-        CurrencyExchangeCurrencyPickerCurrencyOption> items)
+    IReadOnlyList<CurrencyExchangeCurrencyPickerCurrencyOption> items)
         {
             const ImGuiTableFlags tableFlags =
                 ImGuiTableFlags.Borders |
                 ImGuiTableFlags.RowBg |
                 ImGuiTableFlags.Resizable |
-                ImGuiTableFlags.SizingStretchProp;
+                ImGuiTableFlags.Sortable |
+                ImGuiTableFlags.SizingFixedFit |
+                ImGuiTableFlags.NoSavedSettings;
 
             if (!ImGui.BeginTable(
                     "CurrencyOwnedItemsTable",
@@ -404,23 +399,43 @@ namespace SellMyShit
                 return;
             }
 
+
+            var defaultSortByColum = Settings.SortBy.Value;
+
+
+            var nameTableFlags = ImGuiTableColumnFlags.WidthFixed |
+                ImGuiTableColumnFlags.PreferSortDescending;
+            if (defaultSortByColum == "Name") nameTableFlags |= ImGuiTableColumnFlags.DefaultSort;
             ImGui.TableSetupColumn(
                 "Name",
-                ImGuiTableColumnFlags.NoHide);
+                ImGuiTableColumnFlags.WidthStretch |
+                ImGuiTableColumnFlags.PreferSortAscending);
 
+            var valueTableFlags = ImGuiTableColumnFlags.WidthFixed |
+                ImGuiTableColumnFlags.PreferSortDescending;
+            if (defaultSortByColum == "Value") valueTableFlags |= ImGuiTableColumnFlags.DefaultSort;
             ImGui.TableSetupColumn(
                 "Value",
-                ImGuiTableColumnFlags.WidthFixed);
+                ImGuiTableColumnFlags.WidthFixed |
+                ImGuiTableColumnFlags.DefaultSort |
+                ImGuiTableColumnFlags.PreferSortDescending);
 
+            var ownedTableFlags = ImGuiTableColumnFlags.WidthFixed |
+                ImGuiTableColumnFlags.PreferSortDescending;
+            if (defaultSortByColum == "Owned") ownedTableFlags |= ImGuiTableColumnFlags.DefaultSort;
             ImGui.TableSetupColumn(
-                "Owned",
-                ImGuiTableColumnFlags.WidthFixed);
+                "Owned", ownedTableFlags
+);
 
             ImGui.TableSetupColumn(
                 "Action",
-                ImGuiTableColumnFlags.WidthFixed);
+                ImGuiTableColumnFlags.WidthFixed |
+                ImGuiTableColumnFlags.NoSort);
 
+            // ImGui erzeugt die klickbaren Header und Sortierpfeile.
             ImGui.TableHeadersRow();
+
+            ApplyImGuiTableSorting();
 
             var clipper = new ImGuiListClipperPtr(
                 ImGuiNative.ImGuiListClipper_ImGuiListClipper());
@@ -447,6 +462,45 @@ namespace SellMyShit
             }
 
             ImGui.EndTable();
+        }
+
+        private unsafe void ApplyImGuiTableSorting()
+        {
+            var sortSpecs =
+                ImGui.TableGetSortSpecs();
+
+            if (sortSpecs.NativePtr == null ||
+                !sortSpecs.SpecsDirty ||
+                sortSpecs.SpecsCount <= 0)
+            {
+                return;
+            }
+
+            var columnSortSpec =
+                sortSpecs.Specs;
+
+            Settings.SortBy.Value =
+                GetSortOption(columnSortSpec.ColumnIndex);
+
+            Settings.SortAscending.Value =
+                columnSortSpec.SortDirection ==
+                ImGuiSortDirection.Ascending;
+
+            _displayItemsSourceVersion = -1;
+
+            sortSpecs.SpecsDirty = false;
+        }
+        private static float GetSortHeaderWidth(string label)
+        {
+            var textWidth =
+                ImGui.CalcTextSize($"{label} v").X;
+
+            var style =
+                ImGui.GetStyle();
+
+            return textWidth +
+                   style.FramePadding.X * 2 +
+                   style.CellPadding.X * 2;
         }
 
         private void DrawOwnedItemRow(
