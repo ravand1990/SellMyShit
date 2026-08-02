@@ -29,6 +29,10 @@ enum SellSequenceStep
     ClickWantedItemInput,
     TypeWantedItemValue,
     BlurInput,
+
+    ShowMarketRatioTooltip,
+    ShowDetailedMarketRatioTooltip,
+    WaitForDetailedMarketRatioInfo,
     WaitForMarketRatio,
 
 

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using ExileCore;
 using ExileCore.PoEMemory.Elements.Village;
 using ExileCore.PoEMemory.Models;
@@ -11,6 +12,7 @@ using ExileCore.Shared;
 using ExileCore.Shared.Helpers;
 using ImGuiNET;
 using Microsoft.VisualBasic.Devices;
+using Newtonsoft.Json;
 using SharpDX;
 using NumVector2 = System.Numerics.Vector2;
 
@@ -34,6 +36,7 @@ namespace SellMyShit
         private DateTime _sellSequenceStepStartedUtc;
         private CurrencyExchangeCurrencyPickerCurrencyOption _pendingSellItem;
         private CurrencyExchangeCurrencyPickerCurrencyOption _pendingWantedItem;
+        private MarketRatio _pendingMarketRatio;
 
         private string _pendingSellItemName = string.Empty;
         private int _pendingSellOwnedAmount;
@@ -58,8 +61,13 @@ namespace SellMyShit
         private string _displayItemsFilter = string.Empty;
         private int _displayItemsSortColumn = -1;
         private bool _displayItemsSortAscending;
-
+        private bool _isAltKeyDown = false;
         private Point storedMousePosition;
+
+
+        private List<string> debugMessages = new List<string>();
+
+
         public override bool Initialise() => true;
 
         public override void Render()
@@ -70,10 +78,10 @@ namespace SellMyShit
             try
             {
                 var currencyExchangePanel = GetCurrencyExchangePanel();
-
-
                 if (Settings.Debug)
                 {
+
+                    DebugImGuiWindow();
                     if (currencyExchangePanel.IsVisible)
                     {
                         var currencyPicker = currencyExchangePanel.CurrencyPicker;
@@ -140,7 +148,7 @@ namespace SellMyShit
                 var ownedItems =
                     GetCurrencyExchangeItems(currencyExchangePanel);
 
-                DrawOwnedItemsUi(ownedItems);
+                if (SellSequenceStep.Idle == _sellSequenceStep) DrawOwnedItemsUi(ownedItems);
             }
             catch (Exception ex)
             {
@@ -155,7 +163,7 @@ namespace SellMyShit
             return GameController?
                 .IngameState?
                 .IngameUi?
-                .CurrencyExchangePanel as CurrencyExchangePanel;
+                .CurrencyExchangePanel;
         }
 
         private List<CurrencyExchangeCurrencyPickerCurrencyOption>
@@ -604,7 +612,7 @@ namespace SellMyShit
             {
                 case SellSequenceStep.Start:
                     storedMousePosition = MouseInput.Mouse.GetCursorPosition();
-                    MyLogMessage($"Stored Mouse Position {storedMousePosition}");
+                    debugMessages.Add($"Stored Mouse Position {storedMousePosition}");
                     {
                         SetSellSequenceStep(
                             isCurrencyPickerVisible
@@ -641,7 +649,7 @@ namespace SellMyShit
                         }
 
                         var iHaveButtonPosition =
-                            (Vector2)currencyExchangePanel
+                            currencyExchangePanel
                                 .Children[iHaveButtonChildIndex]
                                 .GetClientRect()
                                 .Center;
@@ -701,7 +709,7 @@ namespace SellMyShit
                         }
 
                         var searchInputPosition =
-                            (Vector2)currencyPicker
+                            currencyPicker
                                 .Children[searchInputChildIndex]
                                 .GetClientRect()
                                 .Center;
@@ -848,7 +856,7 @@ namespace SellMyShit
                         }
 
                         if (QueueGameClick(
-                                (Vector2)ownedItemRect.Center))
+                                ownedItemRect.Center))
                         {
                             SetSellSequenceStep(
                                 SellSequenceStep
@@ -905,11 +913,19 @@ namespace SellMyShit
 
                         if (selectedWantedItemName == WantedCurrencyName)
                         {
-                            MyLogMessage(
-                                $"{itemName} is already selected as wanted currency.");
+                            debugMessages.Add(
+                                $"{WantedCurrencyName} is already selected as wanted currency.");
 
-                            SetSellSequenceStep(
-                                SellSequenceStep.ClickOfferedItemInput);
+
+                            if (Settings.ListPriceBasedOnHighestCompetingTrade)
+                            {
+                                SetSellSequenceStep(SellSequenceStep.ShowMarketRatioTooltip);
+                            }
+                            else
+                            {
+                                SetSellSequenceStep(
+                                    SellSequenceStep.WaitForMarketRatio);
+                            }
 
                             break;
                         }
@@ -945,7 +961,7 @@ namespace SellMyShit
                         }
 
                         var iWantButtonPosition =
-                            (Vector2)currencyExchangePanel
+                            currencyExchangePanel
                                 .GetChildAtIndex(iWantButtonChildIndex)
                                 .GetClientRect()
                                 .Center;
@@ -1000,7 +1016,7 @@ namespace SellMyShit
                         }
 
                         var searchInputPosition =
-                            (Vector2)currencyPicker
+                            currencyPicker
                                 .GetChildAtIndex(searchInputChildIndex)
                                 .GetClientRect()
                                 .Center;
@@ -1159,7 +1175,7 @@ namespace SellMyShit
                         }
 
                         if (QueueGameClick(
-                                (Vector2)wantedItemRect.Center))
+                                wantedItemRect.Center))
                         {
                             SetSellSequenceStep(
                                 SellSequenceStep
@@ -1179,17 +1195,133 @@ namespace SellMyShit
 
                         _pendingWantedItem = null;
 
-                        SetSellSequenceStep(
-                            SellSequenceStep.WaitForMarketRatio);
+
+                        if (Settings.ListPriceBasedOnHighestCompetingTrade)
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.ShowMarketRatioTooltip);
+                        }
+                        else
+                        {
+                            SetSellSequenceStep(
+                                SellSequenceStep.WaitForMarketRatio);
+                        }
 
                         break;
                     }
 
 
+                case SellSequenceStep.ShowMarketRatioTooltip:
+                    {
+                        if (IsGameInputBusy())
+                            break;
 
+                        debugMessages.Add(
+                            $"Showing market ratio tooltip for " +
+                            $"{ownedAmount} of {itemName}...");
+
+                        var marketRatioPanelChildIndex = Settings.MarketRatioPanelIndex.Value;
+                        var marketRatioPanel = currencyExchangePanel.GetChildAtIndex(marketRatioPanelChildIndex);
+
+
+
+                        if (QueueGameMove(marketRatioPanel.GetClientRect().Center))
+                        {
+                            {
+                                Thread.Sleep(
+                                    Settings.MouseSettleDelayMilliseconds.Value);
+
+                                SetSellSequenceStep(
+                                    SellSequenceStep.ShowDetailedMarketRatioTooltip);
+                                break;
+                            }
+                        }
+
+                        break;
+                    }
+
+                case SellSequenceStep.ShowDetailedMarketRatioTooltip:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        debugMessages.Add(
+                            $"Showing detailed market ratio tooltip for " +
+                            $"{ownedAmount} of {itemName}...");
+
+                        var marketRatioPanelChildIndex = Settings.MarketRatioPanelIndex.Value;
+                        var marketRatioPanel = currencyExchangePanel.GetChildAtIndex(marketRatioPanelChildIndex);
+                        var marketRatioPanelTooltip = marketRatioPanel?.Tooltip;
+
+                        if (marketRatioPanelTooltip == null)
+                        {
+                            break;
+                        }
+
+                        if (!_isAltKeyDown)
+                        {
+                            KeyboardInput.Keyboard.AltKeyDown();
+                            debugMessages.Add($"Pressing Alt to show detailed market ratio info");
+
+                            _isAltKeyDown = true;
+                        }
+
+                        SetSellSequenceStep(
+                            SellSequenceStep.WaitForDetailedMarketRatioInfo);
+                        break;
+                    }
+
+                case SellSequenceStep.WaitForDetailedMarketRatioInfo:
+                    {
+                        if (IsGameInputBusy())
+                            break;
+
+                        if (TimeInCurrentStep() <
+                            TimeSpan.FromMilliseconds(
+                                Settings.MarketRatioDelayMilliseconds.Value))
+                        {
+                            break;
+                        }
+
+                        debugMessages.Add(
+                            $"Waiting for detailed market ratio info for " +
+                            $"{ownedAmount} of {itemName}...");
+
+                        var marketRatioPanelChildIndex = Settings.MarketRatioPanelIndex.Value;
+                        var marketRatioPanel = currencyExchangePanel.GetChildAtIndex(marketRatioPanelChildIndex);
+                        var marketRatioPanelTooltip = marketRatioPanel?.Tooltip;
+
+
+                        if (!marketRatioPanelTooltip.Children.Any(child => child.Text == "Competing Trades"))
+                        {
+                            break;
+                        }
+
+                        _pendingMarketRatio = GetMarketRatioForPendingExchange(currencyExchangePanel);
+
+                        if (_isAltKeyDown)
+                        {
+                            KeyboardInput.Keyboard.AltKeyUp();
+                            _isAltKeyDown = false;
+                        }
+
+                        if (_pendingMarketRatio == null || _pendingMarketRatio.MarketGetRate <= 0 || _pendingMarketRatio.MarketGiveRate <= 0)
+                        {
+                            break;
+                        }
+
+                        debugMessages.Add(
+                            $"Market ratio for {ownedAmount} of {itemName}: " +
+                            $"{_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}");
+
+                        SetSellSequenceStep(
+                            SellSequenceStep.ClickOfferedItemInput);
+                        break;
+                    }
 
                 case SellSequenceStep.WaitForMarketRatio:
                     {
+
                         if (IsGameInputBusy())
                             break;
 
@@ -1202,17 +1334,22 @@ namespace SellMyShit
                             break;
                         }
 
-                        var marketRateGet =
-                            currencyExchangePanel.MarketRateGet;
+                        var marketRatio = GetMarketRatioForPendingExchange(currencyExchangePanel);
 
-                        var marketRateGive =
-                            currencyExchangePanel.MarketRateGive;
+                        var marketRateGive = currencyExchangePanel.MarketRateGive;
 
-                        if (marketRateGet <= 0 ||
-                            marketRateGive <= 0)
+                        if (marketRatio.MarketGetRate <= 0 ||
+                            marketRatio.MarketGiveRate <= 0)
                         {
                             break;
                         }
+
+                        debugMessages.Add(
+                            $"Market ratio for {ownedAmount} of {itemName}: " +
+                            $"{marketRatio.MarketGetRate}:{marketRatio.MarketGiveRate}");
+
+                        _pendingMarketRatio = marketRatio;
+
 
                         SetSellSequenceStep(
                             SellSequenceStep.ClickOfferedItemInput);
@@ -1235,7 +1372,7 @@ namespace SellMyShit
                             break;
                         }
 
-                        var offeredInputPosition = (Vector2)offeredItemCountInput.GetClientRect().Center;
+                        var offeredInputPosition = offeredItemCountInput.GetClientRect().Center;
 
                         if (QueueGameClick(offeredInputPosition))
                         {
@@ -1291,7 +1428,7 @@ namespace SellMyShit
                         }
 
                         var wantedInputPosition =
-                            (Vector2)wantedItemCountInput
+                            wantedItemCountInput
                                 .GetClientRect()
                                 .Center;
 
@@ -1310,32 +1447,35 @@ namespace SellMyShit
                         if (IsGameInputBusy())
                             break;
 
-                        var marketRateGet =
-                            currencyExchangePanel.MarketRateGet;
 
-                        var marketRateGive =
-                            currencyExchangePanel.MarketRateGive;
+                        debugMessages.Add(
+                            $"Calculating wanted value for " +
+                            $"{ownedAmount} of {itemName}...");
+
+                        debugMessages.Add(
+                            $"Market ratio: " +
+                            $"{_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}");
 
                         var wantedValue =
                             CalculateWantedAmount(
                                 ownedAmount,
-                                marketRateGet,
-                                marketRateGive,
+                                _pendingMarketRatio.MarketGetRate,
+                                _pendingMarketRatio.MarketGiveRate,
                                 Settings.ListingPricePercent.Value);
 
                         if (wantedValue <= 0)
                         {
                             LogError(
                                 $"Invalid market ratio: " +
-                                $"{marketRateGet}:{marketRateGive}");
+                                $"{_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}");
 
                             StopSellSequence();
                             break;
                         }
 
-                        MyLogMessage(
+                        debugMessages.Add(
                             $"Pricing {ownedAmount} {itemName}: " +
-                            $"market={marketRateGet}:{marketRateGive}, " +
+                            $"market={_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}, " +
                             $"wanted={wantedValue}");
 
                         if (QueueGameTextReplacement(
@@ -1354,12 +1494,12 @@ namespace SellMyShit
                         if (IsGameInputBusy())
                             break;
 
-                        var villageGold = currencyExchangePanel.GetChildAtIndex(14);
+                        var villageGold = currencyExchangePanel.GetChildAtIndex(15);
                         var villageGoldPosition = villageGold.GetClientRect().Center;
 
                         if (QueueGameClick(villageGoldPosition))
                         {
-                            MyLogMessage($"Blurring input to lock in ratio... ");
+                            debugMessages.Add($"Blurring input to lock in ratio... ");
 
                             SetSellSequenceStep(
                                 SellSequenceStep.CheckIfSellButtonIsActive);
@@ -1422,14 +1562,14 @@ namespace SellMyShit
                         }
 
                         var sellButtonPosition =
-                            (Vector2)currencyExchangePanel
+                            currencyExchangePanel
                                 .Children[sellButtonChildIndex]
                                 .GetClientRect()
                                 .Center;
 
                         if (QueueGameClick(sellButtonPosition))
                         {
-                            MyLogMessage(
+                            debugMessages.Add(
                                 $"Sell sequence completed for " +
                                 $"{ownedAmount} of {itemName}.");
 
@@ -1476,7 +1616,7 @@ namespace SellMyShit
                         }
 
                         var iHaveButtonPosition =
-                            (Vector2)currencyExchangePanel
+                            currencyExchangePanel
                                 .Children[iHaveButtonChildIndex]
                                 .GetClientRect()
                                 .Center;
@@ -1504,17 +1644,27 @@ namespace SellMyShit
             if (item == null)
                 return;
 
+
+
             if (_sellSequenceStep != SellSequenceStep.Idle)
             {
-                MyLogMessage("A sell sequence is already running.");
+                debugMessages.Add("A sell sequence is already running.");
                 return;
+            }
+
+            if (!GameController.Window.IsForeground())
+            {
+                var focused =
+                    WinApi.SetForegroundWindow(
+                        GameController.Window.Process.MainWindowHandle);
+                debugMessages.Add($"Focused PoE: {focused}");
             }
 
             _pendingSellItem = item;
             _pendingSellItemName = GetItemName(item);
             _pendingSellOwnedAmount = item.Owned;
 
-            MyLogMessage(
+            debugMessages.Add(
                 $"Started sell sequence for {_pendingSellItemName}, " +
                 $"owned amount: {_pendingSellOwnedAmount}.");
 
@@ -1549,7 +1699,7 @@ namespace SellMyShit
             _sellSequenceStep = step;
             _sellSequenceStepStartedUtc = DateTime.UtcNow;
 
-            MyLogMessage(
+            debugMessages.Add(
                 $"Sell sequence step: {step}");
         }
 
@@ -1562,6 +1712,9 @@ namespace SellMyShit
 
             _pendingSellItemName = string.Empty;
             _pendingSellOwnedAmount = 0;
+            _pendingMarketRatio = null;
+            _isAltKeyDown = false;
+
         }
 
         private TimeSpan TimeInCurrentStep()
@@ -1603,12 +1756,8 @@ namespace SellMyShit
                     Thread.Sleep(
                         preFocusDelayMilliseconds);
 
-                    var focused =
-                        WinApi.SetForegroundWindow(
-                            gameWindowHandle);
 
-                    MyLogMessage(
-                        $"Focused PoE before typing: {focused}");
+
 
                     Thread.Sleep(
                         postFocusDelayMilliseconds);
@@ -1617,7 +1766,7 @@ namespace SellMyShit
                         KeyboardInput.Keyboard
                             .ReplaceText(text);
 
-                    MyLogMessage(
+                    debugMessages.Add(
                         $"Replaced input text with " +
                         $"\"{text}\": {typed}");
                 });
@@ -1658,12 +1807,9 @@ namespace SellMyShit
                     Thread.Sleep(
                         preFocusDelayMilliseconds);
 
-                    var focused =
-                        WinApi.SetForegroundWindow(
-                            gameWindowHandle);
 
-                    MyLogMessage(
-                        $"Focused PoE: {focused}");
+
+
 
                     Thread.Sleep(
                         postFocusDelayMilliseconds);
@@ -1672,7 +1818,7 @@ namespace SellMyShit
                         MouseInput.Mouse.MoveMouse(
                             screenPosition);
 
-                    MyLogMessage(
+                    debugMessages.Add(
                         $"Moved mouse: {moved}, " +
                         $"position: {screenPosition}");
 
@@ -1683,7 +1829,7 @@ namespace SellMyShit
                         MouseInput.Mouse.LeftClick(
                             mouseButtonHoldMilliseconds);
 
-                    MyLogMessage(
+                    debugMessages.Add(
                         $"Clicked PoE: {clicked}");
                 });
         }
@@ -1723,12 +1869,10 @@ namespace SellMyShit
                     Thread.Sleep(
                         preFocusDelayMilliseconds);
 
-                    var focused =
-                        WinApi.SetForegroundWindow(
-                            gameWindowHandle);
 
-                    MyLogMessage(
-                        $"Focused PoE: {focused}");
+
+
+
 
                     Thread.Sleep(
                         postFocusDelayMilliseconds);
@@ -1737,7 +1881,7 @@ namespace SellMyShit
                         MouseInput.Mouse.MoveMouse(
                             screenPosition);
 
-                    MyLogMessage(
+                    debugMessages.Add(
                         $"Moved mouse: {moved}, " +
                         $"position: {screenPosition}");
 
@@ -1898,7 +2042,79 @@ namespace SellMyShit
                 : 0;
         }
 
+        private MarketRatio GetMarketRatioForPendingExchange(CurrencyExchangePanel currencyExchangePanel, int neededAmount = 100)
+        {
+            if (currencyExchangePanel == null)
+            {
+                return null;
+            }
 
+            if (Settings.ListPriceBasedOnHighestCompetingTrade)
+            {
+                debugMessages.Add($"ListPriceBasedOnHighestCompetingTrade is enabled. Attempting to retrieve all available market ratios...");
+                var marketRatioPanelChildIndex = Settings.MarketRatioPanelIndex.Value;
+                var marketRatioPanel = currencyExchangePanel.GetChildAtIndex(marketRatioPanelChildIndex);
+                var marketRatioPanelTooltip = marketRatioPanel?.Tooltip;
+
+                var allMarketRatioLinesGroupedByHeight = marketRatioPanelTooltip?.Children?
+                    .GroupBy(child => child.Y)
+                    .Select(group => group
+                        .Select(child => child.TextNoTags)
+                        .ToList())
+                    .ToList();
+
+                var availableMarketRatios = new List<MarketRatio>();
+
+
+
+
+                foreach (var marketRatioLine in allMarketRatioLinesGroupedByHeight)
+                {
+                    var marketRatio = new MarketRatio
+                    {
+                        MarketGetRate = int.TryParse(marketRatioLine[0].Split(" : ").FirstOrDefault().Replace(">", "").Replace("<", ""), out int giveRate) ? giveRate : 0,
+                        MarketGiveRate = int.TryParse(marketRatioLine[0].Split(" : ").LastOrDefault().Replace(">", "").Replace("<", ""), out int getRate) ? getRate : 0,
+                    };
+
+
+                    if (marketRatio.MarketGetRate <= 0 || marketRatio.MarketGiveRate <= 0)
+                    {
+                        CustomDebugImGuiWindow($"Skipping market ratio line due to invalid rates: {marketRatioLine[0]}");
+                        continue;
+                    }
+
+                    marketRatio.AvailableTrades = int.TryParse(marketRatioLine[1].Replace(".", ""), out int trades) ? trades : 0;
+
+                    CustomDebugImGuiWindow($"Found market ratio: {marketRatio.MarketGetRate}:{marketRatio.MarketGiveRate} with {marketRatio.AvailableTrades} available trades.");
+
+
+                    if (marketRatio.MarketGetRate > 0 && marketRatio.MarketGiveRate > 0 && marketRatio.AvailableTrades > 0)
+                    {
+                        availableMarketRatios.Add(marketRatio);
+                    }
+                }
+
+                availableMarketRatios = availableMarketRatios.OrderByDescending(ratio => ratio.MarketGetRate).ToList();
+
+                if (Settings.OnlyPickRatiosWithSufficientStock)
+                {
+                    availableMarketRatios = availableMarketRatios.Where(ratio => ratio.AvailableTrades >= neededAmount).ToList();
+                }
+
+                CustomDebugImGuiWindow($"Json Formated Ratios: {JsonConvert.SerializeObject(availableMarketRatios, Formatting.Indented)}");
+
+                return availableMarketRatios.FirstOrDefault();
+            }
+            else
+            {
+                return new MarketRatio
+                {
+                    MarketGetRate = currencyExchangePanel.MarketRateGet,
+                    MarketGiveRate = currencyExchangePanel.MarketRateGive,
+                    AvailableTrades = 0 // Not available in this mode
+                };
+            }
+        }
 
         private void MyLogMessage(string message)
         {
@@ -1908,5 +2124,40 @@ namespace SellMyShit
             }
         }
 
+        private void DebugImGuiWindow()
+        {
+            try
+            {
+                if (!Settings.Debug)
+                    return;
+
+                ImGui.Separator();
+
+                ImGui.Text($"Sell sequence step: {_sellSequenceStep}");
+                ImGui.Text($"Pending sell item: {_pendingSellItemName}");
+                ImGui.Text($"Pending sell owned amount: {_pendingSellOwnedAmount}");
+                ImGui.Text($"Pending wanted item: {_pendingWantedItem?.Text}");
+                ImGui.Text($"Input in progress: {(_inputInProgress != 0)}");
+
+                ImGui.Separator();
+
+                foreach (var message in debugMessages)
+                {
+                    ImGui.NewLine();
+                    ImGui.TextWrapped(message);
+                }
+            }
+            catch (Exception ex)
+            {
+            }
+        }
+
+        private void CustomDebugImGuiWindow(string message)
+        {
+            if (!Settings.Debug)
+                return;
+
+            ImGui.TextWrapped(message);
+        }
     }
 }
