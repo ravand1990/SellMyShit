@@ -968,8 +968,7 @@ namespace SellMyShit
 
                         if (selectedWantedItemName == WantedCurrencyName)
                         {
-                            AddDebugMessage(
-                                $"{WantedCurrencyName} is already selected as wanted currency.");
+                            AddDebugMessage($"{WantedCurrencyName} is already selected as wanted currency.");
 
 
                             if (Settings.ListPriceBasedOnHighestCompetingTrade)
@@ -1271,6 +1270,15 @@ namespace SellMyShit
                         if (IsGameInputBusy())
                             break;
 
+                        if (TimeInCurrentStep() <
+                            TimeSpan.FromMilliseconds(
+                                Settings
+                                    .MarketRatioDelayMilliseconds
+                                    .Value))
+                        {
+                            break;
+                        }
+
                         AddDebugMessage(
                             $"Showing market ratio tooltip for " +
                             $"{ownedAmount} of {itemName}...");
@@ -1278,7 +1286,11 @@ namespace SellMyShit
                         var marketRatioPanelChildIndex = Settings.MarketRatioPanelIndex.Value;
                         var marketRatioPanel = currencyExchangePanel.GetChildAtIndex(marketRatioPanelChildIndex);
 
-
+                        if (marketRatioPanel.Text.Contains("Retrieving"))
+                        {
+                            AddDebugMessage("Market ratio panel not loaded yet, retrying...");
+                            break;
+                        }
 
                         if (QueueGameMove(marketRatioPanel.GetClientRect().Center))
                         {
