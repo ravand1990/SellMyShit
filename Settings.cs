@@ -118,6 +118,13 @@ namespace SellMyShit
             InterfaceGroupId)]
         public ToggleNode Debug { get; set; } = new(false);
 
+        [Menu(
+            "Test-Run?",
+            "Enable this, if you want to check wether the prices are put in correctly without actually clicking the sell button.",
+            107,
+            InterfaceGroupId)]
+        public ToggleNode TestRun { get; set; } = new(false);
+
         // ─────────────────────────────────────────────
         // Pricing
         // ─────────────────────────────────────────────

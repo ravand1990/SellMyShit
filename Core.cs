@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -666,7 +667,7 @@ namespace SellMyShit
             {
                 case SellSequenceStep.Start:
                     storedMousePosition = MouseInput.Mouse.GetCursorPosition();
-                    debugMessages.Add($"Stored Mouse Position {storedMousePosition}");
+                    AddDebugMessage($"Stored Mouse Position {storedMousePosition}");
                     {
                         SetSellSequenceStep(
                             isCurrencyPickerVisible
@@ -967,7 +968,7 @@ namespace SellMyShit
 
                         if (selectedWantedItemName == WantedCurrencyName)
                         {
-                            debugMessages.Add(
+                            AddDebugMessage(
                                 $"{WantedCurrencyName} is already selected as wanted currency.");
 
 
@@ -1270,7 +1271,7 @@ namespace SellMyShit
                         if (IsGameInputBusy())
                             break;
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Showing market ratio tooltip for " +
                             $"{ownedAmount} of {itemName}...");
 
@@ -1299,7 +1300,7 @@ namespace SellMyShit
                         if (IsGameInputBusy())
                             break;
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Showing detailed market ratio tooltip for " +
                             $"{ownedAmount} of {itemName}...");
 
@@ -1315,7 +1316,7 @@ namespace SellMyShit
                         if (!_isAltKeyDown)
                         {
                             KeyboardInput.Keyboard.AltKeyDown();
-                            debugMessages.Add($"Pressing Alt to show detailed market ratio info");
+                            AddDebugMessage($"Pressing Alt to show detailed market ratio info");
 
                             _isAltKeyDown = true;
                         }
@@ -1337,7 +1338,7 @@ namespace SellMyShit
                             break;
                         }
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Waiting for detailed market ratio info for " +
                             $"{ownedAmount} of {itemName}...");
 
@@ -1351,7 +1352,16 @@ namespace SellMyShit
                             break;
                         }
 
+                        AddDebugMessage("Found competing trades window...");
+
+
                         _pendingMarketRatio = GetMarketRatioForPendingExchange(currencyExchangePanel);
+
+                        if (_pendingMarketRatio == null)
+                        {
+                            AddDebugMessage("Competing trade for pending item not found...");
+                            break;
+                        }
 
                         if (_isAltKeyDown)
                         {
@@ -1364,7 +1374,7 @@ namespace SellMyShit
                             break;
                         }
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Market ratio for {ownedAmount} of {itemName}: " +
                             $"{_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}");
 
@@ -1398,7 +1408,7 @@ namespace SellMyShit
                             break;
                         }
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Market ratio for {ownedAmount} of {itemName}: " +
                             $"{marketRatio.MarketGetRate}:{marketRatio.MarketGiveRate}");
 
@@ -1502,11 +1512,11 @@ namespace SellMyShit
                             break;
 
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Calculating wanted value for " +
                             $"{ownedAmount} of {itemName}...");
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Market ratio: " +
                             $"{_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}");
 
@@ -1527,7 +1537,7 @@ namespace SellMyShit
                             break;
                         }
 
-                        debugMessages.Add(
+                        AddDebugMessage(
                             $"Pricing {ownedAmount} {itemName}: " +
                             $"market={_pendingMarketRatio.MarketGetRate}:{_pendingMarketRatio.MarketGiveRate}, " +
                             $"wanted={wantedValue}");
@@ -1553,7 +1563,7 @@ namespace SellMyShit
 
                         if (QueueGameClick(villageGoldPosition))
                         {
-                            debugMessages.Add($"Blurring input to lock in ratio... ");
+                            AddDebugMessage($"Blurring input to lock in ratio... ");
 
                             SetSellSequenceStep(
                                 SellSequenceStep.CheckIfSellButtonIsActive);
@@ -1621,9 +1631,14 @@ namespace SellMyShit
                                 .GetClientRect()
                                 .Center;
 
+                        if (Settings.TestRun)
+                        {
+                            SetSellSequenceStep(SellSequenceStep.End);
+                            break;
+                        }
                         if (QueueGameClick(sellButtonPosition))
                         {
-                            debugMessages.Add(
+                            AddDebugMessage(
                                 $"Sell sequence completed for " +
                                 $"{ownedAmount} of {itemName}.");
 
@@ -1702,7 +1717,7 @@ namespace SellMyShit
 
             if (_sellSequenceStep != SellSequenceStep.Idle)
             {
-                debugMessages.Add("A sell sequence is already running.");
+                AddDebugMessage("A sell sequence is already running.");
                 return;
             }
 
@@ -1711,14 +1726,14 @@ namespace SellMyShit
                 var focused =
                     WinApi.SetForegroundWindow(
                         GameController.Window.Process.MainWindowHandle);
-                debugMessages.Add($"Focused PoE: {focused}");
+                AddDebugMessage($"Focused PoE: {focused}");
             }
 
             _pendingSellItem = item;
             _pendingSellItemName = GetItemName(item);
             _pendingSellOwnedAmount = item.Owned;
 
-            debugMessages.Add(
+            AddDebugMessage(
                 $"Started sell sequence for {_pendingSellItemName}, " +
                 $"owned amount: {_pendingSellOwnedAmount}.");
 
@@ -1753,7 +1768,7 @@ namespace SellMyShit
             _sellSequenceStep = step;
             _sellSequenceStepStartedUtc = DateTime.UtcNow;
 
-            debugMessages.Add(
+            AddDebugMessage(
                 $"Sell sequence step: {step}");
         }
 
@@ -1767,6 +1782,9 @@ namespace SellMyShit
             _pendingSellItemName = string.Empty;
             _pendingSellOwnedAmount = 0;
             _pendingMarketRatio = null;
+
+            if (_isAltKeyDown) KeyboardInput.Keyboard.AltKeyUp();
+
             _isAltKeyDown = false;
 
         }
@@ -1820,7 +1838,7 @@ namespace SellMyShit
                         KeyboardInput.Keyboard
                             .ReplaceText(text);
 
-                    debugMessages.Add(
+                    AddDebugMessage(
                         $"Replaced input text with " +
                         $"\"{text}\": {typed}");
                 });
@@ -1872,7 +1890,7 @@ namespace SellMyShit
                         MouseInput.Mouse.MoveMouse(
                             screenPosition);
 
-                    debugMessages.Add(
+                    AddDebugMessage(
                         $"Moved mouse: {moved}, " +
                         $"position: {screenPosition}");
 
@@ -1883,7 +1901,7 @@ namespace SellMyShit
                         MouseInput.Mouse.LeftClick(
                             mouseButtonHoldMilliseconds);
 
-                    debugMessages.Add(
+                    AddDebugMessage(
                         $"Clicked PoE: {clicked}");
                 });
         }
@@ -1935,7 +1953,7 @@ namespace SellMyShit
                         MouseInput.Mouse.MoveMouse(
                             screenPosition);
 
-                    debugMessages.Add(
+                    AddDebugMessage(
                         $"Moved mouse: {moved}, " +
                         $"position: {screenPosition}");
 
@@ -2009,8 +2027,8 @@ namespace SellMyShit
 
         private static int CalculateWantedAmount(
             int offeredAmount,
-            int marketRateGet,
-            int marketRateGive,
+            float marketRateGet,
+            float marketRateGive,
             int listingPricePercent)
         {
             if (offeredAmount <= 0 ||
@@ -2105,7 +2123,7 @@ namespace SellMyShit
 
             if (Settings.ListPriceBasedOnHighestCompetingTrade)
             {
-                debugMessages.Add($"ListPriceBasedOnHighestCompetingTrade is enabled. Attempting to retrieve all available market ratios...");
+                AddDebugMessage($"ListPriceBasedOnHighestCompetingTrade is enabled. Attempting to retrieve all available market ratios...");
                 var marketRatioPanelChildIndex = Settings.MarketRatioPanelIndex.Value;
                 var marketRatioPanel = currencyExchangePanel.GetChildAtIndex(marketRatioPanelChildIndex);
                 var marketRatioPanelTooltip = marketRatioPanel?.Tooltip;
@@ -2117,19 +2135,31 @@ namespace SellMyShit
                         .ToList())
                     .ToList();
 
+                // AddDebugMessage($"Json Formated competing trade lines: {JsonConvert.SerializeObject(allMarketRatioLinesGroupedByHeight, Formatting.Indented)}");
+
                 var availableMarketRatios = new List<MarketRatio>();
-
-
-
-
                 foreach (var marketRatioLine in allMarketRatioLinesGroupedByHeight)
                 {
+                    var ratioParts = marketRatioLine[0].Split(" : ");
+
                     var marketRatio = new MarketRatio
                     {
-                        MarketGetRate = int.TryParse(marketRatioLine[0].Split(" : ").FirstOrDefault().Replace(">", "").Replace("<", ""), out int giveRate) ? giveRate : 0,
-                        MarketGiveRate = int.TryParse(marketRatioLine[0].Split(" : ").LastOrDefault().Replace(">", "").Replace("<", ""), out int getRate) ? getRate : 0,
-                    };
+                        MarketGetRate = float.TryParse(
+                            ratioParts.FirstOrDefault()?.Replace(">", "").Replace("<", "").Trim(),
+                            NumberStyles.Float,
+                            CultureInfo.InvariantCulture,
+                            out float giveRate)
+                                ? giveRate
+                                : 0,
 
+                        MarketGiveRate = float.TryParse(
+                            ratioParts.LastOrDefault()?.Replace(">", "").Replace("<", "").Trim(),
+                            NumberStyles.Float,
+                            CultureInfo.InvariantCulture,
+                            out float getRate)
+                                ? getRate
+                                : 0,
+                    };
 
                     if (marketRatio.MarketGetRate <= 0 || marketRatio.MarketGiveRate <= 0)
                     {
@@ -2155,7 +2185,7 @@ namespace SellMyShit
                     availableMarketRatios = availableMarketRatios.Where(ratio => ratio.AvailableTrades >= neededAmount).ToList();
                 }
 
-                CustomDebugImGuiWindow($"Json Formated Ratios: {JsonConvert.SerializeObject(availableMarketRatios, Formatting.Indented)}");
+                AddDebugMessage($"Json Formated Ratios: {JsonConvert.SerializeObject(availableMarketRatios, Formatting.Indented)}");
 
                 return availableMarketRatios.FirstOrDefault();
             }
@@ -2212,6 +2242,42 @@ namespace SellMyShit
                 return;
 
             ImGui.TextWrapped(message);
+        }
+
+        private void AddDebugMessage(string message)
+        {
+            if (debugMessages.Count == 0)
+            {
+                debugMessages.Add(message);
+                return;
+            }
+
+            int lastIndex = debugMessages.Count - 1;
+            string lastMessage = debugMessages[lastIndex];
+
+            string lastMessageWithoutCounter =
+                Regex.Replace(lastMessage, @"\s*\(\d+\)$", "");
+
+            if (lastMessageWithoutCounter == message)
+            {
+                Match match = Regex.Match(lastMessage, @"\((\d+)\)$");
+
+                if (match.Success)
+                {
+                    int count = int.Parse(match.Groups[1].Value);
+
+                    debugMessages[lastIndex] =
+                        Regex.Replace(lastMessage, @"\(\d+\)$", $"({count + 1})");
+                }
+                else
+                {
+                    debugMessages[lastIndex] = $"{message} (2)";
+                }
+            }
+            else
+            {
+                debugMessages.Add(message);
+            }
         }
     }
 }

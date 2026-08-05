@@ -1,7 +1,7 @@
 public class MarketRatio
 {
-    public int MarketGiveRate { get; set; }
-    public int MarketGetRate { get; set; }
+    public float MarketGiveRate { get; set; }
+    public float MarketGetRate { get; set; }
 
     public int AvailableTrades { get; set; }
 }
