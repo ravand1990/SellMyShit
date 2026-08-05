@@ -1,10 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Linq;
-using System.Text.Json.Serialization;
-using System.Xml;
-using ExileCore;
 using ExileCore.Shared.Attributes;
 using ExileCore.Shared.Interfaces;
 using ExileCore.Shared.Nodes;
@@ -17,21 +13,23 @@ namespace SellMyShit
     {
         private const int InterfaceGroupId = 100;
         private const int PricingGroupId = 200;
-        private const int SequenceGroupId = 300;
-        private const int InputTimingGroupId = 400;
-        private const int CompatibilityGroupId = 500;
+        private const int TimingGroupId = 300;
+        private const int InputGroupId = 400;
+        private const int AdvancedGroupId = 500;
         private const int ExcludedCurrenciesGroupId = 600;
 
         private static readonly List<string> DefaultExcludedCurrencies =
         [
             "Mirror of Kalandra",
-    "Hinekora's Lock",
-    "Divine Orb",
-    "Chaos Orb"
+            "Hinekora's Lock",
+            "Divine Orb",
+            "Chaos Orb"
         ];
 
         private static readonly string DefaultExcludedCurrenciesJson =
             JsonConvert.SerializeObject(DefaultExcludedCurrencies);
+
+        private readonly Random _delayRandom = new();
 
         private string _newExcludedCurrency = string.Empty;
 
@@ -39,7 +37,6 @@ namespace SellMyShit
             new(DefaultExcludedCurrencies);
 
         private string _loadedExcludedCurrenciesJson;
-
 
         public Settings()
         {
@@ -51,7 +48,6 @@ namespace SellMyShit
                     SortOptions.Owned
                 });
 
-
             ExcludedCurrenciesEditor = new CustomNode
             {
                 DrawDelegate = DrawExcludedCurrenciesEditor
@@ -60,37 +56,24 @@ namespace SellMyShit
 
         public ToggleNode Enable { get; set; } = new(true);
 
-        // ─────────────────────────────────────────────
-        // Interface
-        // ─────────────────────────────────────────────
-
         [Menu(
             "Interface",
-            "Settings for the owned-currency window.",
+            "Settings for the owned-items window.",
             InterfaceGroupId)]
         public EmptyNode InterfaceGroup { get; set; } = new();
 
         [Menu(
-            "Window width",
-            "Width of the scrollable owned-currency list.",
+            "Pin Window",
+            "Docks the window to the top-right corner of the " +
+            "currency exchange panel.",
             101,
             InterfaceGroupId)]
-        public RangeNode<int> WindowWidth { get; set; } =
-            new(520, 300, 1200);
+        public ToggleNode PinWindow { get; set; } = new(true);
 
         [Menu(
-            "Window height",
-            "Height of the scrollable owned-currency list.",
+            "Default Sort Column",
+            "The column the item table is sorted by initially.",
             102,
-            InterfaceGroupId)]
-        public RangeNode<int> WindowHeight { get; set; } =
-            new(340, 150, 1000);
-
-
-        [Menu(
-            "Default Sort by",
-            "The currently selected sort column.",
-            103,
             InterfaceGroupId)]
         public ListNode SortBy { get; set; } = new()
         {
@@ -98,29 +81,26 @@ namespace SellMyShit
         };
 
         [Menu(
-               "Restore mouse position?",
-               "If the sell sequence ends, the mouse jumps back to where you initiated the sequence.",
-               104,
-               InterfaceGroupId)]
-        public ToggleNode RestoreMousePosition { get; set; } = new(true);
-
-        [Menu(
-            "Default Sort ascending?",
-            "Sort low-to-high instead of high-to-low.",
-            105,
+            "Default Sort Ascending",
+            "Sorts low-to-high instead of high-to-low.",
+            103,
             InterfaceGroupId)]
         public ToggleNode SortAscending { get; set; } = new(false);
 
         [Menu(
-            "Show Debug Messages?",
-            null,
-            106,
+            "Restore Mouse Position",
+            "Moves the cursor back to where it was once a sequence " +
+            "finishes.",
+            104,
+            InterfaceGroupId)]
+        public ToggleNode RestoreMousePosition { get; set; } = new(true);
+
+        [Menu(
+            "Show Debug Messages",
+            "Displays the debug window and verbose sequence logging.",
+            105,
             InterfaceGroupId)]
         public ToggleNode Debug { get; set; } = new(false);
-
-        // ─────────────────────────────────────────────
-        // Pricing
-        // ─────────────────────────────────────────────
 
         [Menu(
             "Pricing",
@@ -129,230 +109,136 @@ namespace SellMyShit
         public EmptyNode PricingGroup { get; set; } = new();
 
         [Menu(
-            "Listing price percent",
-            "Percentage of the detected market ratio to request. " +
-            "100 means the listing is priced at 100% of the market ratio.",
+            "Listing Price Percent",
+            "The percentage of the detected market ratio to request. " +
+            "100 lists at the full market ratio.",
             201,
             PricingGroupId)]
         public RangeNode<int> ListingPricePercent { get; set; } =
             new(100, 1, 100);
 
-
         [Menu(
-            "Use highest competing market ratio for listing price?",
-            "If enabled, the plugin will use the market ratio of the competing trade to determine the listing price. The trades will usually take longer to complete, but the listing price will be more profitable",
+            "Use Highest Competing Ratio",
+            "Lists at the highest competing trade ratio instead of " +
+            "the current market rate. Trades take longer to fill but " +
+            "are more profitable.",
             202,
             PricingGroupId)]
-        public ToggleNode ListPriceBasedOnHighestCompetingTrade { get; set; } = new(false);
+        public ToggleNode UseHighestCompetingRatio { get; set; } =
+            new(false);
 
-        [Menu("Only pick ratios with sufficient stock?",
-            "If enabled, the plugin will only pick ratios that have enough stock to fulfill your request. Usually, the stock is sufficient, unless large amounts of currencies are being sold.",
+        [Menu(
+            "Require Sufficient Stock",
+            "Only picks competing ratios whose stock covers the " +
+            "amount being sold.",
             203,
             PricingGroupId)]
-        public ToggleNode OnlyPickRatiosWithSufficientStock { get; set; } = new(true);
-
-
-        // ─────────────────────────────────────────────
-        // Sell sequence
-        // ─────────────────────────────────────────────
+        public ToggleNode RequireSufficientStock { get; set; } =
+            new(true);
 
         [Menu(
-            "Sell sequence",
-            "Timeouts and delays used by the automated sell process.",
-            SequenceGroupId)]
-        public EmptyNode SequenceGroup { get; set; } = new();
+            "Timing",
+            "Delays and timeouts for the automated sequences.",
+            TimingGroupId)]
+        public EmptyNode TimingGroup { get; set; } = new();
 
         [Menu(
-            "Step timeout (seconds)",
-            "Stops the sequence when one state remains active for too long.",
+            "Action Delay (ms)",
+            "The base delay between automated inputs and state checks. " +
+            "Every use is randomized by plus/minus 10 percent " +
+            "(100 becomes 90-110).",
             301,
-            SequenceGroupId)]
+            TimingGroupId)]
+        public RangeNode<int> ActionDelayMilliseconds { get; set; } =
+            new(100, 0, 1000);
+
+        [Menu(
+            "Collect Delay (ms)",
+            "The delay between individual item collections. Applies " +
+            "with and without InputHumanizer because of trade rate " +
+            "limits.",
+            302,
+            TimingGroupId)]
+        public RangeNode<int> CollectDelayMilliseconds { get; set; } =
+            new(1000, 250, 5000);
+
+        [Menu(
+            "Step Timeout (s)",
+            "Skips the current item when one sequence step remains " +
+            "active for this long.",
+            303,
+            TimingGroupId)]
         public RangeNode<int> SequenceTimeoutSeconds { get; set; } =
             new(5, 1, 30);
 
         [Menu(
-            "Search result delay (ms)",
-            "Time to wait after entering a currency name before clicking its result.",
-            302,
-            SequenceGroupId)]
-        public RangeNode<int> CurrencySearchDelayMilliseconds { get; set; } =
-            new(100, 0, 5000);
+            "Input",
+            "How mouse and keyboard input is delivered.",
+            InputGroupId)]
+        public EmptyNode InputGroup { get; set; } = new();
 
         [Menu(
-            "Market ratio delay (ms)",
-            "Time to wait after entering amounts before checking the updated ratio.",
-            303,
-            SequenceGroupId)]
-        public RangeNode<int> MarketRatioDelayMilliseconds { get; set; } =
-            new(100, 0, 5000);
-
-        // ─────────────────────────────────────────────
-        // Input timing
-        // ─────────────────────────────────────────────
-
-        [Menu(
-            "Input timing",
-            "Mouse, keyboard, focus, and overlay timing settings.",
-            InputTimingGroupId)]
-        public EmptyNode InputTimingGroup { get; set; } = new();
-
-        [Menu(
-            "Text overlay hide time (ms)",
-            "How long the plugin window remains hidden while typing.",
+            "Use InputHumanizer",
+            "Routes mouse input through the InputHumanizer plugin " +
+            "(humanized delays and mouse paths) when it is loaded.",
             401,
-            InputTimingGroupId)]
-        public RangeNode<int> TextOverlayHideMilliseconds { get; set; } =
-            new(300, 0, 3000);
+            InputGroupId)]
+        public ToggleNode UseInputHumanizer { get; set; } = new(false);
 
         [Menu(
-            "Click overlay hide time (ms)",
-            "How long the plugin window remains hidden while clicking.",
-            402,
-            InputTimingGroupId)]
-        public RangeNode<int> ClickOverlayHideMilliseconds { get; set; } =
-            new(300, 0, 3000);
+            "Advanced",
+            "Game constants. UI elements are discovered automatically, " +
+            "so there are no child indexes to maintain.",
+            AdvancedGroupId)]
+        public EmptyNode AdvancedGroup { get; set; } = new();
 
         [Menu(
-            "Text pre-focus delay (ms)",
-            "Delay before focusing Path of Exile for keyboard input.",
-            403,
-            InputTimingGroupId)]
-        public RangeNode<int> TextPreFocusDelayMilliseconds { get; set; } =
-            new(150, 0, 1000);
-
-        [Menu(
-            "Text post-focus delay (ms)",
-            "Delay after focusing Path of Exile before typing.",
-            404,
-            InputTimingGroupId)]
-        public RangeNode<int> TextPostFocusDelayMilliseconds { get; set; } =
-            new(150, 0, 1000);
-
-        [Menu(
-            "Text release delay (ms)",
-            "Delay before releasing the shared input lock after typing.",
-            405,
-            InputTimingGroupId)]
-        public RangeNode<int> TextReleaseDelayMilliseconds { get; set; } =
-            new(150, 0, 1000);
-
-        [Menu(
-            "Click pre-focus delay (ms)",
-            "Delay before focusing Path of Exile for a mouse click.",
-            406,
-            InputTimingGroupId)]
-        public RangeNode<int> ClickPreFocusDelayMilliseconds { get; set; } =
-            new(50, 0, 1000);
-
-        [Menu(
-            "Click post-focus delay (ms)",
-            "Delay after focusing Path of Exile before moving the cursor.",
-            407,
-            InputTimingGroupId)]
-        public RangeNode<int> ClickPostFocusDelayMilliseconds { get; set; } =
-            new(50, 0, 1000);
-
-        [Menu(
-            "Mouse settle delay (ms)",
-            "Delay after moving the cursor before pressing the mouse button.",
-            408,
-            InputTimingGroupId)]
-        public RangeNode<int> MouseSettleDelayMilliseconds { get; set; } =
-            new(50, 0, 1000);
-
-        [Menu(
-            "Mouse button hold time (ms)",
-            "Time between the left mouse button down and up events.",
-            409,
-            InputTimingGroupId)]
-        public RangeNode<int> MouseButtonHoldMilliseconds { get; set; } =
-            new(50, 1, 500);
-
-        [Menu(
-            "Click release delay (ms)",
-            "Delay before releasing the shared input lock after clicking.",
-            410,
-            InputTimingGroupId)]
-        public RangeNode<int> ClickReleaseDelayMilliseconds { get; set; } =
-            new(50, 0, 1000);
-
-        // ─────────────────────────────────────────────
-        // Compatibility
-        // ─────────────────────────────────────────────
-
-        [Menu(
-            "Advanced compatibility",
-            "Internal UI indexes. Change these only when a game update changes the exchange UI.",
-            CompatibilityGroupId)]
-        public EmptyNode CompatibilityGroup { get; set; } = new();
-
-
-        [Menu(
-            "I Want button child index",
-            "Child index of the I Want currency-selector button.",
+            "Maximum Concurrent Trades",
+            "How many exchange orders the game allows at the same time.",
             501,
-            CompatibilityGroupId)]
-        public RangeNode<int> IWantButtonChildIndex { get; set; } =
-            new(7, 0, 50);
+            AdvancedGroupId)]
+        public RangeNode<int> MaxConcurrentTrades { get; set; } =
+            new(10, 1, 20);
+
+        /// <summary>
+        /// Returns the base action delay randomized by plus/minus 10 percent,
+        /// so a configured value of 100 yields 90-110 milliseconds.
+        /// </summary>
+        public int GetRandomizedActionDelay()
+        {
+            var baseDelay = ActionDelayMilliseconds.Value;
+
+            if (baseDelay <= 0)
+                return 0;
+
+            return (int)Math.Round(
+                baseDelay * (0.9 + _delayRandom.NextDouble() * 0.2));
+        }
 
         [Menu(
-            "I Have button child index",
-            "Child index of the I Have currency-selector button.",
-            502,
-            CompatibilityGroupId)]
-        public RangeNode<int> IHaveButtonChildIndex { get; set; } =
-            new(10, 0, 50);
-
-        [Menu(
-            "Currency search input child index",
-            "Child index of the currency-picker search input.",
-            503,
-            CompatibilityGroupId)]
-        public RangeNode<int> CurrencyPickerSearchInputChildIndex { get; set; } =
-            new(4, 0, 50);
-
-        [Menu(
-            "Sell button child index",
-            "Child index of the final sell button.",
-            504,
-            CompatibilityGroupId)]
-        public RangeNode<int> SellButtonChildIndex { get; set; } =
-            new(16, 0, 50);
-
-        [Menu(
-            "Market ratio panel index",
-            "Child index of the market ratio panel.",
-            505,
-            CompatibilityGroupId)]
-        public RangeNode<int> MarketRatioPanelIndex { get; set; } =
-            new(14, 0, 50);
-
-
-
-
-        // ─────────────────────────────────────────────
-        // Exclude Currency
-        // ─────────────────────────────────────────────
-
-
-        [Menu(
-            "Excluded currencies",
+            "Excluded Currencies",
             "Currencies that should not be displayed or sold.",
             ExcludedCurrenciesGroupId)]
         public EmptyNode ExcludedCurrenciesGroup { get; set; } = new();
 
-        [Newtonsoft.Json.JsonIgnore]
+        [JsonIgnore]
         [Menu(
-            "Currency list",
+            "Currency List",
             "Add, edit, or remove excluded currencies.",
             601,
             ExcludedCurrenciesGroupId)]
         public CustomNode ExcludedCurrenciesEditor { get; }
 
+        /// <summary>
+        /// JSON-serialized excluded-currency list; the value ExileAPI actually
+        /// persists to the settings file. <see cref="GetExcludedCurrencies"/>
+        /// maintains a deserialized cache on top of it.
+        /// </summary>
         [HideInReflection]
         public TextNode ExcludedCurrenciesJson { get; set; } =
             new(DefaultExcludedCurrenciesJson);
 
+        /// <summary>Returns whether the given currency is on the excluded list.</summary>
         public bool IsCurrencyExcluded(string currencyName)
         {
             if (string.IsNullOrWhiteSpace(currencyName))
@@ -394,14 +280,12 @@ namespace SellMyShit
 
             if (excludedCurrencies.Count == 0)
             {
-                ImGui.TextDisabled("No currencies excluded.");
+                ImGui.TextDisabled("No currencies are excluded.");
                 ImGui.PopID();
                 return;
             }
 
-            for (var index = 0;
-                 index < excludedCurrencies.Count;
-                 index++)
+            for (var index = 0; index < excludedCurrencies.Count; index++)
             {
                 ImGui.PushID(index);
 
@@ -442,15 +326,13 @@ namespace SellMyShit
             if (string.IsNullOrWhiteSpace(value))
                 return;
 
-            var excludedCurrencies =
-                GetExcludedCurrencies();
+            var excludedCurrencies = GetExcludedCurrencies();
 
-            var alreadyExists =
-                excludedCurrencies.Any(existing =>
-                    string.Equals(
-                        existing?.Trim(),
-                        value,
-                        StringComparison.OrdinalIgnoreCase));
+            var alreadyExists = excludedCurrencies.Any(existing =>
+                string.Equals(
+                    existing?.Trim(),
+                    value,
+                    StringComparison.OrdinalIgnoreCase));
 
             if (!alreadyExists)
             {
@@ -461,6 +343,11 @@ namespace SellMyShit
             _newExcludedCurrency = string.Empty;
         }
 
+        /// <summary>
+        /// Returns the cached excluded-currency list, re-deserializing it
+        /// whenever ExileAPI restores a different JSON value from the settings
+        /// file than the one the cache was built from.
+        /// </summary>
         private List<string> GetExcludedCurrencies()
         {
             ExcludedCurrenciesJson ??=
@@ -471,10 +358,6 @@ namespace SellMyShit
             if (string.IsNullOrWhiteSpace(serialized))
                 serialized = DefaultExcludedCurrenciesJson;
 
-            /*
-             * Reload the cache when ExileAPI restores a different
-             * JSON value from the settings file.
-             */
             if (_excludedCurrencies != null &&
                 string.Equals(
                     _loadedExcludedCurrenciesJson,
@@ -507,35 +390,29 @@ namespace SellMyShit
             return _excludedCurrencies;
         }
 
-
-
-
+        /// <summary>
+        /// Serializes the excluded-currency list into
+        /// <see cref="ExcludedCurrenciesJson"/>. Assigning the node's value
+        /// fires its change event, which makes ExileAPI persist the settings.
+        /// </summary>
         private void SaveExcludedCurrencies()
         {
             _excludedCurrencies ??= [];
 
             var serialized =
-                JsonConvert.SerializeObject(
-                    _excludedCurrencies);
+                JsonConvert.SerializeObject(_excludedCurrencies);
 
-            _loadedExcludedCurrenciesJson =
-                serialized;
+            _loadedExcludedCurrenciesJson = serialized;
 
-            /*
-             * Assigning TextNode.Value fires OnValueChanged,
-             * causing ExileAPI to persist the settings.
-             */
-            ExcludedCurrenciesJson.Value =
-                serialized;
+            ExcludedCurrenciesJson.Value = serialized;
         }
-
     }
 
+    /// <summary>Column names selectable as the item table's default sort.</summary>
     public static class SortOptions
     {
         public const string Name = "Name";
         public const string Value = "Value";
         public const string Owned = "Owned";
     }
-
 }
